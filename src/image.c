@@ -7086,12 +7086,12 @@ gif_image_p (Lisp_Object object)
 #endif
 /* avoid conflict with QuickdrawText.h */
 #define DrawText gif_DrawText
-#include <gif_lib.h>
+#include <ungif/gif_lib.h>
 #undef DrawText
 
 #else /* HAVE_NTGUI */
 
-#include <gif_lib.h>
+#include <ungif/gif_lib.h>
 
 #endif /* HAVE_NTGUI */
 
