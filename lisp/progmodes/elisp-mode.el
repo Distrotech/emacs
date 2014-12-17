@@ -227,10 +227,15 @@ Blank lines separate paragraphs.  Semicolons start comments.
 
 \\{emacs-lisp-mode-map}"
   :group 'lisp
+  (defvar xref-find-function)
+  (defvar xref-identifier-completion-table-function)
   (lisp-mode-variables nil nil 'elisp)
   (setq imenu-case-fold-search nil)
   (setq-local eldoc-documentation-function
               #'elisp-eldoc-documentation-function)
+  (setq-local xref-find-function #'elisp-xref-find)
+  (setq-local xref-identifier-completion-table-function
+              #'elisp--xref-identifier-completion-table)
   (add-hook 'completion-at-point-functions
             #'elisp-completion-at-point nil 'local))
 
@@ -426,6 +431,15 @@ It can be quoted, or be inside a quoted form."
             0))
      ((facep sym) (find-definition-noselect sym 'defface)))))
 
+(defvar elisp--identifier-completion-table
+  (apply-partially #'completion-table-with-predicate
+                   obarray
+                   (lambda (sym)
+                     (or (boundp sym)
+                         (fboundp sym)
+                         (symbol-plist sym)))
+                   'strict))
+
 (defun elisp-completion-at-point ()
   "Function used for `completion-at-point-functions' in `emacs-lisp-mode'."
   (with-syntax-table emacs-lisp-mode-syntax-table
@@ -466,13 +480,8 @@ It can be quoted, or be inside a quoted form."
                            :company-docsig #'elisp--company-doc-string
                            :company-location #'elisp--company-location))
                     ((elisp--form-quoted-p beg)
-                     (list nil obarray
-                           ;; Don't include all symbols
-                           ;; (bug#16646).
-                           :predicate (lambda (sym)
-                                        (or (boundp sym)
-                                            (fboundp sym)
-                                            (symbol-plist sym)))
+                     ;; Don't include all symbols (bug#16646).
+                     (list nil elisp--identifier-completion-table
                            :annotation-function
                            (lambda (str) (if (fboundp (intern-soft str)) " <f>"))
                            :company-doc-buffer #'elisp--company-doc-buffer
@@ -547,6 +556,34 @@ It can be quoted, or be inside a quoted form."
 
 (define-obsolete-function-alias
   'lisp-completion-at-point 'elisp-completion-at-point "25.1")
+
+;;; Xref backend
+
+(declare-function xref-make-buffer-location "xref" (buffer position))
+(declare-function xref-make-bogus-location "xref" (message))
+(declare-function xref-make "xref" (description location))
+
+;; FIXME: unify with `elisp--company-location'.
+(defun elisp-xref-find (action id)
+  (when (eq action 'definitions)
+    (let ((sym (intern-soft id)))
+      (when sym
+        (let ((fun (if (fboundp sym) (elisp--xref-find-type sym nil)))
+              (var (if (boundp sym) (elisp--xref-find-type sym 'defvar))))
+          (remove nil (list fun var)))))))
+
+(defun elisp--xref-find-type (symbol type)
+  (let ((loc (condition-case err
+                 (let ((loc (save-excursion
+                              (find-definition-noselect symbol type))))
+                   (xref-make-buffer-location (car loc) (or (cdr loc) 1)))
+               (error
+                (xref-make-bogus-location (error-message-string err)))))
+        (desc (format "(%s %s)" (or type 'defun) symbol)))
+    (xref-make desc loc)))
+
+(defun elisp--xref-identifier-completion-table ()
+  elisp--identifier-completion-table)
 
 ;;; Elisp Interaction mode
 
