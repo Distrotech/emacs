@@ -340,7 +340,8 @@ WINDOW controls how the buffer is displayed:
   (define-key map (kbd ".") #'xref-next-line)
   (define-key map (kbd ",") #'xref-prev-line))
 
-(defun xref--buffer-name () "*xref*")
+(defconst xref-buffer-name "*xref*"
+  "The name of the buffer to show xrefs.")
 
 (defun xref--insert-xrefs (xref-alist)
   "Insert XREF-ALIST in the current-buffer.
@@ -369,7 +370,7 @@ Return an alist of the form ((FILENAME . (XREF ...)) ...)."
 
 (defun xref--show-xref-buffer (xrefs)
   (let ((xref-alist (xref--analyze xrefs)))
-    (with-current-buffer (get-buffer-create (xref--buffer-name))
+    (with-current-buffer (get-buffer-create xref-buffer-name)
       (let ((inhibit-read-only t))
         (erase-buffer)
         (xref--insert-xrefs xref-alist)
