@@ -304,7 +304,9 @@ WINDOW controls how the buffer is displayed:
 (defun xref--next-line (backward)
   (let ((loc (xref--search-property 'xref-location backward)))
     (when loc
-      (xref--show-location loc))))
+      (save-window-excursion
+        (xref--show-location loc)
+        (sit-for most-positive-fixnum)))))
 
 (defun xref-next-line ()
   "Move to the next xref and display its source in the other window."
