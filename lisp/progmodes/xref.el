@@ -36,11 +36,12 @@
 ;; `xref-make-buffer-location' or `xref-make-bogus-location' to create
 ;; them.
 ;;
-;; For each identifier, we consider that either it has a precise
-;; string representation that's easy to find out (in which case we
-;; operate with a string value), or we use the value t if a background
-;; process is expected to determine it using the buffer contents and
-;; the current position.
+;; Each identifier must be represented as a string.  Implementers can
+;; use string properties to store additional information about the
+;; identifier, but they should keep in mind that values returned from
+;; `xref-identifier-completion-table-function' should still be
+;; distinct, because the user can't see the properties when making the
+;; choice.
 ;;
 ;; See the functions `etags-xref-find' and `elisp-xref-find' for full
 ;; examples.
@@ -168,18 +169,23 @@ found, return nil.
  (apropos PATTERN): Find all symbols that match PATTERN.  PATTERN
 is a regexp.
 
-IDENTIFIER can be any non-nil value returned by
-`xref-identifier-at-point-function', or any value in
-`xref-identifier-completion-table-function'.
+IDENTIFIER can be any string returned by
+`xref-identifier-at-point-function', or from the table returned
+by `xref-identifier-completion-table-function'.
 
 To create an xref object, call `xref-make'.")
 
 (defvar xref-identifier-at-point-function #'xref-default-identifier-at-point
   "Function to get the relevant identifier at point.
 
-The return value must be a string, t or nil.  nil means no
-identifier at point found.  t means that there is an identifier
-at point, but its string representation is difficult to obtain.")
+The return value must be a string or nil.  nil means no
+identifier at point found.
+
+If it's hard to determinte the identifier precisely (e.g. because
+it's a method call on unknown type), the implementation can
+return a simple string (such as symbol at point) marked with a
+special text property which `xref-find-function' would recognize
+and then delegate the work to an external process.")
 
 (defvar xref-identifier-completion-table-function #'tags-lazy-completion-table
   "Function that returns the completion table for identifiers.")
@@ -394,9 +400,7 @@ Return an alist of the form ((FILENAME . (XREF ...)) ...)."
 (defun xref--show-xrefs (id kind xrefs window)
   (cond
    ((null xrefs)
-    (if (eq id t)
-        (error "No known %s for the identifier at point" kind)
-      (error "No known %s for: %s" kind id)))
+    (error "No known %s for: %s" kind id))
    ((not (cdr xrefs))
     (xref-push-marker-stack)
     (xref--pop-to-location (xref--xref-location (car xrefs)) window))
@@ -410,7 +414,7 @@ Return an alist of the form ((FILENAME . (XREF ...)) ...)."
     (cond ((or current-prefix-arg (not id))
            (completing-read prompt
                             (funcall xref-identifier-completion-table-function)
-                            nil t (unless (eq id t) id)))
+                            nil t id))
           (t id))))
 
 
