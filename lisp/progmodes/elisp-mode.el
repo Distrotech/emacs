@@ -419,17 +419,29 @@ It can be quoted, or be inside a quoted form."
 
 (declare-function find-library-name "find-func" (library))
 
+(defvar elisp--identifier-types '(defun defvar feature defface))
+
+(defun elisp--identifier-location (type sym)
+  (pcase (cons type sym)
+    (`(defun . ,(pred fboundp))
+     (find-definition-noselect sym nil))
+    (`(defvar . ,(pred boundp))
+     (find-definition-noselect sym 'defvar))
+    (`(defface . ,(pred facep))
+     (find-definition-noselect sym 'defface))
+    (`(feature . ,(pred featurep))
+     (require 'find-func)
+     (cons (find-file-noselect (find-library-name
+                                (symbol-name sym)))
+           1))))
+
 (defun elisp--company-location (str)
-  (let ((sym (intern-soft str)))
-    (cond
-     ((fboundp sym) (find-definition-noselect sym nil))
-     ((boundp sym) (find-definition-noselect sym 'defvar))
-     ((featurep sym)
-      (require 'find-func)
-      (cons (find-file-noselect (find-library-name
-                                 (symbol-name sym)))
-            0))
-     ((facep sym) (find-definition-noselect sym 'defface)))))
+  (catch 'res
+    (let ((sym (intern-soft str)))
+      (when sym
+        (dolist (type elisp--identifier-types)
+          (let ((loc (elisp--identifier-location type sym)))
+            (and loc (throw 'res loc))))))))
 
 (defvar elisp--identifier-completion-table
   (apply-partially #'completion-table-with-predicate
@@ -437,6 +449,7 @@ It can be quoted, or be inside a quoted form."
                    (lambda (sym)
                      (or (boundp sym)
                          (fboundp sym)
+                         (featurep sym)
                          (symbol-plist sym)))
                    'strict))
 
@@ -563,24 +576,28 @@ It can be quoted, or be inside a quoted form."
 (declare-function xref-make-bogus-location "xref" (message))
 (declare-function xref-make "xref" (description location))
 
-;; FIXME: unify with `elisp--company-location'.
 (defun elisp-xref-find (action id)
   (when (eq action 'definitions)
     (let ((sym (intern-soft id)))
       (when sym
-        (let ((fun (if (fboundp sym) (elisp--xref-find-type sym nil)))
-              (var (if (boundp sym) (elisp--xref-find-type sym 'defvar))))
-          (remove nil (list fun var)))))))
+        (remove nil (elisp--xref-find-definitions sym))))))
 
-(defun elisp--xref-find-type (symbol type)
-  (let ((loc (condition-case err
-                 (let ((loc (save-excursion
-                              (find-definition-noselect symbol type))))
-                   (xref-make-buffer-location (car loc) (or (cdr loc) 1)))
-               (error
-                (xref-make-bogus-location (error-message-string err)))))
-        (desc (format "(%s %s)" (or type 'defun) symbol)))
-    (xref-make desc loc)))
+(defun elisp--xref-find-definitions (symbol)
+  (save-excursion
+    (mapcar
+     (lambda (type)
+       (let ((loc
+              (condition-case err
+                  (let ((buf-pos (elisp--identifier-location type symbol)))
+                    (when buf-pos
+                      (xref-make-buffer-location (car buf-pos)
+                                                 (or (cdr buf-pos) 1))))
+                (error
+                 (xref-make-bogus-location (error-message-string err))))))
+         (when loc
+           (xref-make (format "(%s %s)" type symbol)
+                      loc))))
+     elisp--identifier-types)))
 
 (defun elisp--xref-identifier-completion-table ()
   elisp--identifier-completion-table)
