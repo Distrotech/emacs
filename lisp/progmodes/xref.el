@@ -331,8 +331,8 @@ WINDOW controls how the buffer is displayed:
 (defun xref-goto-xref ()
   "Jump to the xref at point and close the xref buffer."
   (interactive)
-  (xref--show-location (xref--location-at-point))
-  (quit-window))
+  (quit-window)
+  (xref--show-location (xref--location-at-point)))
 
 (define-derived-mode xref--xref-buffer-mode fundamental-mode "XREF"
   "Mode for displaying cross-refenences."
