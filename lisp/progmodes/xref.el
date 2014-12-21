@@ -328,11 +328,15 @@ WINDOW controls how the buffer is displayed:
   (or (get-text-property (point) 'xref-location)
       (error "No reference at point")))
 
+(defvar-local xref--window nil)
+
 (defun xref-goto-xref ()
-  "Jump to the xref at point and close the xref buffer."
+  "Jump to the xref at point and bury the xref buffer."
   (interactive)
-  (quit-window)
-  (xref--show-location (xref--location-at-point)))
+  (let ((loc (xref--location-at-point))
+        (window xref--window))
+    (quit-window)
+    (xref--pop-to-location loc window)))
 
 (define-derived-mode xref--xref-buffer-mode fundamental-mode "XREF"
   "Mode for displaying cross-refenences."
@@ -376,7 +380,7 @@ Return an alist of the form ((FILENAME . (XREF ...)) ...)."
                     (xref-location-group (xref--xref-location x)))
                   #'equal))
 
-(defun xref--show-xref-buffer (xrefs)
+(defun xref--show-xref-buffer (xrefs window)
   (let ((xref-alist (xref--analyze xrefs)))
     (with-current-buffer (get-buffer-create xref-buffer-name)
       (let ((inhibit-read-only t))
@@ -385,6 +389,7 @@ Return an alist of the form ((FILENAME . (XREF ...)) ...)."
         (xref--xref-buffer-mode)
         (pop-to-buffer (current-buffer))
         (goto-char (point-min))
+        (setq xref--window window)
         (current-buffer)))))
 
 
@@ -406,7 +411,7 @@ Return an alist of the form ((FILENAME . (XREF ...)) ...)."
     (xref--pop-to-location (xref--xref-location (car xrefs)) window))
    (t
     (xref-push-marker-stack)
-    (funcall xref-show-xrefs-function xrefs))))
+    (funcall xref-show-xrefs-function xrefs window))))
 
 (defun xref--read-identifier (prompt)
   "Return the identifier at point or read it from the minibuffer."
@@ -440,7 +445,7 @@ With prefix argument, prompt for the identifier."
 
 ;;;###autoload
 (defun xref-find-definitions-other-frame (identifier)
-  "Like `xref-find-definitions' but switch to the other window."
+  "Like `xref-find-definitions' but switch to the other frame."
   (interactive (list (xref--read-identifier "Find definitions of: ")))
   (xref--find-definitions identifier 'frame))
 
